@@ -1,11 +1,26 @@
 import { ScreepsAPI } from "screeps-api"
 import * as git from "./git-rev"
 import { readdir, readFile, rename } from "fs/promises"
-import type { Plugin, OutputOptions, OutputBundle } from "rollup"
+import type { Plugin, OutputOptions, OutputBundle, PluginContext } from "rollup"
 import { dirname, extname, join } from "path"
 
 const SCREEPS_SERVER = process?.env.SCREEPS_SERVER
 const SCREEPS_BRANCH = process?.env.SCREEPS_BRANCH
+
+type SpawnPosConfig =
+  | {
+      x: number
+      y: number
+      name?: string
+      auto?: never
+    }
+  | {
+      auto: true
+    }
+export type SpawnConfig = {
+  roomName: string
+  respawn?: boolean
+} & SpawnPosConfig
 
 export interface ScreepsConfig {
   token?: string
@@ -24,6 +39,7 @@ export interface ScreepsOptions {
   server?: string
   branch?: string
   dryRun?: boolean
+  spawn?: SpawnConfig | ((api: ScreepsAPI) => Promise<SpawnConfig | false>)
 }
 
 export interface BinaryModule {
@@ -142,6 +158,51 @@ export function getBranchName(branch: string | undefined) {
   return git.branch()
 }
 
+export async function spawn(this: PluginContext, api: ScreepsAPI, screepsOptions: ScreepsOptions) {
+  const spawnConfig: SpawnConfig | false =
+    typeof screepsOptions.spawn === "function"
+      ? await screepsOptions.spawn(api)
+      : Object.assign({}, screepsOptions.spawn, api.appConfig.spawn, api.opts.spawn)
+  if (!spawnConfig || !spawnConfig.roomName) return
+
+  if (!spawnConfig.auto && (spawnConfig.x === undefined || spawnConfig.y === undefined))
+    return this.error("Invalid spawn config, missing coordinates")
+
+  const { status } = await api.raw.user.worldStatus()
+  if (status !== "empty") {
+    if (status !== "lost" && spawnConfig.respawn !== true)
+      return this.info("Game is not lost, skipping respawn")
+
+    this.info("Respawning...")
+    await api.raw.user.respawn()
+  }
+
+  const pos = await findSpawnPos(api, spawnConfig)
+  if (!pos) return this.error("Failed to find spawn position")
+
+  await api.raw.game.placeSpawn(spawnConfig.roomName, pos.x, pos.y, pos.name)
+  this.info(`Spawn placed at ${pos.x},${pos.y} in ${spawnConfig.roomName}`)
+}
+
+async function findSpawnPos(api: ScreepsAPI, spawnConfig: SpawnPosConfig & { roomName: string }) {
+  if (!spawnConfig.auto) return { name: "Spawn1", ...spawnConfig }
+
+  const terrainRes = await api.raw.game.roomTerrain(spawnConfig.roomName)
+  if (!terrainRes.ok || terrainRes.terrain.length !== 1 || !("terrain" in terrainRes.terrain[0]))
+    return null
+
+  const terrain = terrainRes.terrain[0].terrain
+
+  const UNBUILDABLE_BORDER = 2
+  for (let y = UNBUILDABLE_BORDER; y < 50 - UNBUILDABLE_BORDER; y++) {
+    for (let x = UNBUILDABLE_BORDER; x < 50 - UNBUILDABLE_BORDER; x++) {
+      const idx = y * 50 + x
+      if (terrain[idx] === "0") return { name: "auto", x, y }
+    }
+  }
+  return null
+}
+
 export function screeps(screepsOptions: ScreepsOptions = {}) {
   return {
     name: "screeps",
@@ -153,18 +214,18 @@ export function screeps(screepsOptions: ScreepsOptions = {}) {
     async writeBundle(options, _bundle) {
       if (options.sourcemap) await writeSourceMaps(options)
 
+      if (screepsOptions.dryRun) return this.warn("Dry run enabled, skipping upload")
+
       const hasServer =
         SCREEPS_SERVER ||
         screepsOptions.server ||
         screepsOptions.config ||
         screepsOptions.configFile
-      if (!screepsOptions.dryRun && hasServer) {
-        await uploadSource(await loadApi(screepsOptions), options)
-      } else if (!hasServer) {
-        this.error("No config provided, skipping upload")
-      } else {
-        this.warn("Dry run, skipping upload")
-      }
+      if (!hasServer) return this.error("No config provided, skipping upload")
+
+      const api = await loadApi(screepsOptions)
+      await uploadSource(api, options)
+      await spawn.call(this, api, screepsOptions)
     },
   } as Plugin
 }
