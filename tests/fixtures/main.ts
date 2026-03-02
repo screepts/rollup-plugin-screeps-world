@@ -1,3 +1,3 @@
-import {input} from './input'
+import { input } from "./input"
 
-console.log(input('hello'))
+console.log(input("hello"))

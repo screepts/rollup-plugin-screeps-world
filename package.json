@@ -1,46 +1,58 @@
 {
   "name": "rollup-plugin-screeps-world",
+  "version": "2.0.0",
   "description": "Rollup Plugin for Screeps",
+  "keywords": [
+    "rolldown",
+    "rollup",
+    "screeps",
+    "vite",
+    "world"
+  ],
+  "bugs": {
+    "url": "https://github.com/screepers/rollup-plugin-screeps-world/issues"
+  },
   "license": "MIT",
   "author": "Adam Laycock",
-  "contributors": ["Carson Burke", "shanemadden"],
+  "contributors": [
+    "Carson Burke",
+    "shanemadden",
+    "ShuP1"
+  ],
   "repository": {
     "type": "git",
     "url": "https://github.com/screepers/rollup-plugin-screeps-world"
   },
-  "bugs": {
-    "url": "https://github.com/screepers/rollup-plugin-screeps-world/issues"
+  "files": [
+    "dist"
+  ],
+  "type": "module",
+  "types": "./dist/index.d.mts",
+  "exports": {
+    ".": "./dist/index.mjs",
+    "./package.json": "./package.json"
   },
-  "version": "1.0.3",
-  "main": "dist/index.js",
-  "module": "dist/es/index.js",
   "scripts": {
-    "prepublishOnly": "rollup -c",
-    "test": "mocha -r esm -r ts-node/register tests/**/*.spec.js"
+    "build": "tsdown",
+    "prepublishOnly": "node --run build",
+    "lint": "oxlint",
+    "fmt": "oxfmt",
+    "fmt:check": "oxfmt --check",
+    "test:e2e": "vitest run --typecheck",
+    "test:types": "tsc --noEmit",
+    "test": "node --run fmt:check && node --run lint && node --run test:types"
   },
   "dependencies": {
-    "git-rev-sync": "^3.0.2",
-    "screeps-api": "^1.11.0"
+    "screeps-api": "^1.16.1"
   },
   "devDependencies": {
-    "@types/mocha": "^7.0.2",
-    "@types/node": "^13.11.1",
-    "@types/rollup": "^0.54.0",
-    "chai": "^4.2.0",
-    "chai-as-promised": "^7.1.1",
-    "esm": "^3.2.25",
-    "mocha": "^10.2.0",
-    "rollup": "^2.6.0",
-    "rollup-plugin-clear": "^2.0.7",
-    "rollup-plugin-copy": "^3.3.0",
-    "rollup-plugin-hypothetical": "^2.1.0",
-    "rollup-plugin-typescript2": "^0.27.0",
-    "ts-node": "^8.8.2",
-    "typescript": "^3.8.3"
-  },
-  "keywords": [
-    "rollup",
-    "screeps",
-    "world"
-  ]
+    "@types/node": "^25.3.3",
+    "oxfmt": ">=0.40.0 <2.0.0",
+    "oxlint": "^1.50.0",
+    "rollup": "^4.59.0",
+    "rollup-plugin-typescript2": "^0.36.0",
+    "tsdown": ">=0.21.2 <2.0.0",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.16"
+  }
 }
