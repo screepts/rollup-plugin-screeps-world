@@ -1,8 +1,7 @@
 import { ScreepsAPI } from "screeps-api"
 import * as git from "./git-rev"
-import { readdir, readFile, rename } from "fs/promises"
+import { readFile } from "fs/promises"
 import type { Plugin, OutputOptions, OutputBundle, PluginContext } from "rollup"
-import { dirname, extname, join } from "path"
 
 const SCREEPS_SERVER = process?.env.SCREEPS_SERVER
 const SCREEPS_BRANCH = process?.env.SCREEPS_BRANCH
@@ -42,37 +41,30 @@ export interface ScreepsOptions {
   spawn?: SpawnConfig | ((api: ScreepsAPI) => Promise<SpawnConfig | false>)
 }
 
-export interface BinaryModule {
+interface BinaryModule {
   binary: string
 }
-
-export interface CodeList {
+interface CodeList {
   [key: string]: string | BinaryModule
 }
 
-export function generateSourceMaps(bundle: OutputBundle) {
-  // Iterate through bundle and test if type===chunk && map is defined
-  let itemName: string
-  for (itemName in bundle) {
+/** Replace all source maps with js modules that export the map as a string */
+function generateBundle(this: PluginContext, options: OutputOptions, bundle: OutputBundle) {
+  if (!options.sourcemap) return
+  for (const itemName in bundle) {
     const item = bundle[itemName]
-    if (item.type === "chunk" && item.map) {
-      // Tweak maps
-      const tmp = item.map.toString
-
-      delete item.map.sourcesContent
-
-      item.map.toString = function () {
-        return "module.exports = " + tmp.apply(this, arguments as unknown as []) + ";"
-      }
+    if (item.type === "chunk" && item.map && item.sourcemapFileName) {
+      this.emitFile({
+        type: "asset",
+        fileName: item.sourcemapFileName + ".js",
+        source: `module.exports = ${item.map};`,
+      })
+      delete bundle[item.sourcemapFileName]
     }
   }
 }
 
-export function writeSourceMaps(options: OutputOptions) {
-  return rename(options.file + ".map", options.file + ".map.js")
-}
-
-export function validateConfig(cfg: Partial<ScreepsConfig>): cfg is ScreepsConfig {
+function validateConfig(cfg: Partial<ScreepsConfig>): cfg is ScreepsConfig {
   if (cfg.hostname && cfg.hostname === "screeps.com") {
     return [
       typeof cfg.token === "string",
@@ -95,7 +87,7 @@ export function validateConfig(cfg: Partial<ScreepsConfig>): cfg is ScreepsConfi
   ].reduce((a, b) => a && b)
 }
 
-export async function loadConfigFile(configFile: string) {
+async function loadConfigFile(configFile: string) {
   const data = await readFile(configFile, "utf8")
   const cfg = JSON.parse(data) as Partial<ScreepsConfig>
   if (cfg.email && cfg.password && !cfg.token && cfg.hostname === "screeps.com") {
@@ -112,22 +104,19 @@ export async function loadApi(opts: ScreepsOptions) {
     if (!config.token) await api.auth(config.email!, config.password!)
     return api
   }
-  const server = opts.server || SCREEPS_SERVER
+  const server = opts.server || SCREEPS_SERVER || ""
   const branch = opts.branch || SCREEPS_BRANCH
   return ScreepsAPI.fromConfig(server, "rollup", branch ? { branch } : {})
 }
 
-export async function uploadSource(api: ScreepsAPI, options: OutputOptions) {
-  const code = await getFileList(options.file!)
+async function uploadSource(api: ScreepsAPI, bundle: OutputBundle) {
   const branch = await getBranchName(api.opts.branch)
-  return runUpload(api, branch, code)
+  return runUpload(api, branch, getFileList(bundle))
 }
 
-export function runUpload(api: ScreepsAPI, branch: string, code: CodeList) {
-  api.raw.user.branches().then((data: any) => {
-    const branches = data.list.map((b: any) => b.branch)
-
-    if (branches.includes(branch)) {
+function runUpload(api: ScreepsAPI, branch: string, code: CodeList) {
+  api.raw.user.branches().then(({ list }) => {
+    if (list.some(b => b.branch == branch)) {
       api.code.set(branch, code)
     } else {
       api.raw.user.cloneBranch("", branch, code)
@@ -135,21 +124,20 @@ export function runUpload(api: ScreepsAPI, branch: string, code: CodeList) {
   })
 }
 
-const EXTS = [".js", ".wasm", ".cjs", ".mjs"]
-export async function getFileList(outputFile: string) {
+function getFileList(bundle: OutputBundle) {
   const code: CodeList = {}
-  const base = dirname(outputFile)
 
-  const promises = (await readdir(base))
-    .map((file) => ({ file, ext: extname(file) }))
-    .filter(({ ext }) => EXTS.includes(ext))
-    .map(async ({ file, ext }) => {
-      const data = await readFile(join(base, file))
-      const name = file.slice(0, file.length - ext.length)
-      code[name] = ext.endsWith("js") ? data.toString("utf8") : { binary: data.toString("base64") }
-    })
+  for (const itemName in bundle) {
+    const item = bundle[itemName]
+    const name = item.fileName.slice(0, item.fileName.lastIndexOf("."))
+    code[name] =
+      item.type === "chunk"
+        ? item.code
+        : typeof item.source === "string"
+          ? item.source
+          : { binary: Buffer.from(item.source).toString("base64") }
+  }
 
-  await Promise.all(promises)
   return code
 }
 
@@ -203,31 +191,20 @@ async function findSpawnPos(api: ScreepsAPI, spawnConfig: SpawnPosConfig & { roo
   return null
 }
 
-export function screeps(screepsOptions: ScreepsOptions = {}) {
+export function screeps(screepsOptions: ScreepsOptions = {}): Plugin {
   return {
     name: "screeps",
 
-    generateBundle(options, bundle, _isWrite) {
-      if (options.sourcemap) generateSourceMaps(bundle)
-    },
+    generateBundle,
 
-    async writeBundle(options, _bundle) {
-      if (options.sourcemap) await writeSourceMaps(options)
-
+    async writeBundle(_options, bundle) {
       if (screepsOptions.dryRun) return this.warn("Dry run enabled, skipping upload")
 
-      const hasServer =
-        SCREEPS_SERVER ||
-        screepsOptions.server ||
-        screepsOptions.config ||
-        screepsOptions.configFile
-      if (!hasServer) return this.error("No config provided, skipping upload")
-
       const api = await loadApi(screepsOptions)
-      await uploadSource(api, options)
+      await uploadSource(api, bundle)
       await spawn.call(this, api, screepsOptions)
     },
-  } as Plugin
+  }
 }
 
 export default screeps
