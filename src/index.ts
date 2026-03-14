@@ -1,4 +1,4 @@
-import { ScreepsAPI } from "screeps-api"
+import { ScreepsAPI, type CodeList } from "screeps-api"
 import * as git from "./git-rev"
 import { readFile } from "fs/promises"
 import type { Plugin, OutputOptions, OutputBundle, PluginContext } from "rollup"
@@ -39,13 +39,6 @@ export interface ScreepsOptions {
   branch?: string
   dryRun?: boolean
   spawn?: SpawnConfig | ((api: ScreepsAPI) => Promise<SpawnConfig | false>)
-}
-
-interface BinaryModule {
-  binary: string
-}
-interface CodeList {
-  [key: string]: string | BinaryModule
 }
 
 /** Replace all source maps with js modules that export the map as a string */
@@ -111,17 +104,7 @@ export async function loadApi(opts: ScreepsOptions) {
 
 async function uploadSource(api: ScreepsAPI, bundle: OutputBundle) {
   const branch = await getBranchName(api.opts.branch)
-  return runUpload(api, branch, getFileList(bundle))
-}
-
-function runUpload(api: ScreepsAPI, branch: string, code: CodeList) {
-  api.raw.user.branches().then(({ list }) => {
-    if (list.some(b => b.branch == branch)) {
-      api.code.set(branch, code)
-    } else {
-      api.raw.user.cloneBranch("", branch, code)
-    }
-  })
+  return api.code.set(branch, getFileList(bundle))
 }
 
 function getFileList(bundle: OutputBundle) {
