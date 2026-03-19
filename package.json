@@ -1,6 +1,6 @@
 {
-  "name": "rollup-plugin-screeps-world",
-  "version": "2.0.0",
+  "name": "@screepts/rollup-plugin-screeps-world",
+  "version": "1.0.0",
   "description": "Rollup Plugin for Screeps",
   "keywords": [
     "rolldown",
@@ -9,19 +9,16 @@
     "vite",
     "world"
   ],
-  "bugs": {
-    "url": "https://github.com/screepers/rollup-plugin-screeps-world/issues"
-  },
   "license": "MIT",
-  "author": "Adam Laycock",
   "contributors": [
+    "Adam Laycock",
     "Carson Burke",
     "shanemadden",
     "ShuP1"
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/screepers/rollup-plugin-screeps-world"
+    "url": "git+https://github.com/screepts/rollup-plugin-screeps-world.git"
   },
   "files": [
     "dist"
@@ -42,7 +39,7 @@
     "test": "node --run fmt:check && node --run lint"
   },
   "dependencies": {
-    "screeps-api": "^1.16.1"
+    "screeps-api": "npm:@screepts/screeps-api@^1.0.0"
   },
   "devDependencies": {
     "@types/node": "^25.3.3",
