@@ -35,12 +35,11 @@
   "scripts": {
     "build": "tsdown",
     "prepublishOnly": "node --run build",
-    "lint": "oxlint",
+    "lint": "oxlint --type-check --type-aware",
     "fmt": "oxfmt",
     "fmt:check": "oxfmt --check",
     "test:e2e": "vitest run --typecheck",
-    "test:types": "tsc --noEmit",
-    "test": "node --run fmt:check && node --run lint && node --run test:types"
+    "test": "node --run fmt:check && node --run lint"
   },
   "dependencies": {
     "screeps-api": "^1.16.1"
@@ -49,6 +48,7 @@
     "@types/node": "^25.3.3",
     "oxfmt": ">=0.40.0 <2.0.0",
     "oxlint": "^1.50.0",
+    "oxlint-tsgolint": ">=0.17.0 <2.0.0",
     "rollup": "^4.59.0",
     "rollup-plugin-typescript2": "^0.36.0",
     "tsdown": ">=0.21.2 <2.0.0",

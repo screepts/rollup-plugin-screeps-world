@@ -29,7 +29,8 @@ export interface ScreepsConfig {
   hostname: string
   port: number
   path: string
-  branch: string | "auto"
+  /** The branch to use, or "auto" to determine the branch from the current git repository */
+  branch: string
 }
 
 export interface ScreepsOptions {
@@ -50,7 +51,7 @@ function generateBundle(this: PluginContext, options: OutputOptions, bundle: Out
       this.emitFile({
         type: "asset",
         fileName: item.sourcemapFileName + ".js",
-        source: `module.exports = ${item.map};`,
+        source: `module.exports = ${item.map.toString()};`,
       })
       delete bundle[item.sourcemapFileName]
     }
