@@ -105,7 +105,8 @@ export async function loadApi(opts: ScreepsOptions) {
 
 async function uploadSource(api: ScreepsAPI, bundle: OutputBundle) {
   const branch = await getBranchName(api.opts.branch)
-  return api.code.set(branch, getFileList(bundle))
+  await api.code.set(branch, getFileList(bundle))
+  return branch
 }
 
 function getFileList(bundle: OutputBundle) {
@@ -185,7 +186,10 @@ export function screeps(screepsOptions: ScreepsOptions = {}): Plugin {
       if (screepsOptions.dryRun) return this.warn("Dry run enabled, skipping upload")
 
       const api = await loadApi(screepsOptions)
-      await uploadSource(api, bundle)
+
+      const branch = await uploadSource(api, bundle)
+      this.info(`✔ Successfully uploaded to ${branch}`)
+
       await spawn.call(this, api, screepsOptions)
     },
   }
