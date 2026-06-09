@@ -1,20 +1,32 @@
-import { access, readFile } from "fs/promises"
+import { readFile, stat } from "fs/promises"
 import { resolve, sep } from "path"
 import { cwd } from "process"
 
 const RE_BRANCH = /^ref: refs\/heads\/(.*)\n/
+const RE_GITDIR = /^gitdir: (.*)\n/
 
-export async function branch(dir?: string) {
+async function findGitDir(dir?: string) {
   dir ??= cwd()
   const parts = dir.split(sep)
 
-  let gitDir: string | undefined
-  while (!gitDir && parts.length) {
+  while (parts.length) {
     const testPath = resolve(parts.join(sep), ".git")
-    access(testPath)
-      .then(() => (gitDir = testPath))
-      .catch(() => {})
+    parts.pop()
+
+    const s = await stat(testPath).catch(() => undefined)
+    if (!s) continue
+
+    if (!s.isFile()) return testPath
+
+    const content = await readFile(testPath, "utf8")
+    const match = content.match(RE_GITDIR)
+
+    if (match) return match[1]
   }
+}
+
+export async function branch(dir?: string) {
+  const gitDir = await findGitDir(dir)
   if (!gitDir) throw new Error("[git-rev] no git repository found")
 
   const head = await readFile(resolve(gitDir, "HEAD"), "utf8")
