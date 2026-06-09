@@ -1,6 +1,6 @@
 {
   "name": "@screepts/rollup-plugin-screeps-world",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Rollup Plugin for Screeps",
   "keywords": [
     "rolldown",
